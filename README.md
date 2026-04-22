@@ -9,6 +9,7 @@ Each folder under `skills/` is a single self-contained skill. A skill is a `SKIL
 | Skill | What it covers |
 |-------|---------------|
 | [`forwarding-address`](skills/forwarding-address/SKILL.md) | Cross-chain deposit address routing with deterministic addresses and custodial recovery |
+| [`safe-unified-account`](skills/safe-unified-account/SKILL.md) | Multichain smart accounts with abstractionkit — one signature executes across every EVM chain |
 
 ## Install
 

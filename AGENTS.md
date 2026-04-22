@@ -7,6 +7,7 @@ Each skill in `skills/` is a self-contained `SKILL.md` that instructs an AI codi
 ## Skills
 
 - [`forwarding-address`](skills/forwarding-address/SKILL.md) — Cross-chain deposit address routing via JSON-RPC.
+- [`safe-unified-account`](skills/safe-unified-account/SKILL.md) — Multichain smart accounts with abstractionkit; single signature across all EVM chains.
 
 ## Using these skills outside Claude Code
 
