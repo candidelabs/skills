@@ -1,0 +1,6 @@
+# Default owners for everything in this repo.
+# Overrides below take precedence when paths match more specifically.
+*                                       @Sednaoui
+
+# Per-skill ownership — add entries as new skills land.
+/skills/forwarding-address/             @Sednaoui

@@ -10,8 +10,6 @@ Each folder under `skills/` is a single self-contained skill. A skill is a `SKIL
 |-------|---------------|
 | [`forwarding-address`](skills/forwarding-address/SKILL.md) | Cross-chain deposit address routing with deterministic addresses and custodial recovery |
 
-More skills coming. See [Roadmap](#roadmap).
-
 ## Install
 
 ### Claude Code
@@ -38,13 +36,14 @@ ln -s ~/.candide-skills/skills/* ~/.agents/skills/
 
 ### OpenAI Codex CLI
 
-Codex reads project-level context from `AGENTS.md` and skills from `.agents/skills/`. Clone this repo and link skills into your project:
+This repo exposes a Codex-native skill tree under `.codex/skills/`. A helper script links it into your Codex skills directory with a `candide-` prefix to avoid collisions.
 
 ```bash
-git clone https://github.com/candidelabs/skills ~/.candide-skills
-mkdir -p .agents/skills
-ln -s ~/.candide-skills/skills/* .agents/skills/
+git clone https://github.com/candidelabs/skills ~/.codex/candide-skills
+~/.codex/candide-skills/.codex/scripts/install-for-codex.sh
 ```
+
+Full instructions: [`.codex/INSTALL.md`](.codex/INSTALL.md).
 
 ### Gemini CLI
 
@@ -69,26 +68,9 @@ Skills are **procedural knowledge** — they tell the agent *how* to build somet
 - **SDKs** (the actual code libraries devs import — `abstractionkit`, etc.)
 - **Docs** (reference material for humans)
 
-## Roadmap
-
-Planned skills (open an issue to request priority):
-
-- `smart-wallet-mobile` — AbstractionKit in React Native / iOS / Swift
-- `passkey-signing` — WebAuthn + secp256r1 signing for smart accounts
-- `passkey-recovery` — Account recovery flows using passkeys
-- `paymaster-integration` — Gasless transactions via Candide's paymaster
-- `eip-7702` — Delegating EOAs to smart contract code
-- `userop-signing` — Constructing and signing ERC-4337 UserOperations
-- `bundler-client` — Direct bundler RPC usage
-
 ## Contributing
 
-Skills live in `skills/<name>/SKILL.md`. When adding a new skill:
-
-1. Write a tight `description` — this is what the agent matches against to decide whether to load the skill. Lead with the concrete task, then list trigger keywords.
-2. Keep `SKILL.md` focused. If reference material gets long, split into sibling files (e.g., `reference.md`, `examples/`) and link from `SKILL.md`.
-3. Include **hard rules** and **common mistakes** sections — these are the most valuable output for agents.
-4. Register the skill in `.claude-plugin/marketplace.json` if it should ship as part of the plugin.
+See [`CLAUDE.md`](CLAUDE.md) for the full contributor guide — repo layout, skill authoring conventions, and pre-commit checklist.
 
 ## License
 
