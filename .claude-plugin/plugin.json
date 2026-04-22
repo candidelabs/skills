@@ -1,0 +1,21 @@
+{
+  "name": "candide",
+  "version": "0.1.0",
+  "description": "Candide skills for building smart wallets, forwarding addresses, passkey signing, and account abstraction on EVM chains.",
+  "author": {
+    "name": "Candide Labs",
+    "url": "https://candide.dev"
+  },
+  "homepage": "https://docs.candide.dev",
+  "repository": "https://github.com/candidelabs/skills",
+  "license": "MIT",
+  "keywords": [
+    "account-abstraction",
+    "erc-4337",
+    "smart-wallet",
+    "passkeys",
+    "paymaster",
+    "forwarding-address",
+    "candide"
+  ]
+}

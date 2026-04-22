@@ -1,0 +1,19 @@
+{
+  "name": "candide",
+  "description": "Skills for building on Candide's smart wallet infrastructure — account abstraction, passkeys, forwarding addresses, paymasters.",
+  "owner": {
+    "name": "Candide Labs",
+    "email": "hello@candidelabs.com",
+    "url": "https://candide.dev"
+  },
+  "plugins": [
+    {
+      "name": "candide",
+      "source": ".",
+      "description": "All Candide skills: forwarding addresses, passkey signing, smart wallet SDKs, paymasters, recovery.",
+      "version": "0.1.0",
+      "category": "web3",
+      "keywords": ["account-abstraction", "erc-4337", "smart-wallet", "passkeys"]
+    }
+  ]
+}
