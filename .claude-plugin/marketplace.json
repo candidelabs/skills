@@ -9,7 +9,10 @@
   "plugins": [
     {
       "name": "candide",
-      "source": ".",
+      "source": {
+        "source": "github",
+        "repo": "candidelabs/skills"
+      },
       "description": "All Candide skills: forwarding addresses, passkey signing, smart wallet SDKs, paymasters, recovery.",
       "version": "0.1.0",
       "category": "web3",
