@@ -1,6 +1,6 @@
 {
   "name": "candide",
-  "description": "Skills for building on Candide's smart wallet infrastructure — account abstraction, passkeys, forwarding addresses, paymasters.",
+  "description": "Skills for building on Candide's smart wallet infrastructure for EVM chains.",
   "owner": {
     "name": "Candide Labs",
     "email": "hello@candidelabs.com",
@@ -13,7 +13,7 @@
         "source": "github",
         "repo": "candidelabs/skills"
       },
-      "description": "All Candide skills: forwarding addresses, passkey signing, smart wallet SDKs, paymasters, recovery.",
+      "description": "Candide skills: cross-chain forwarding addresses and multichain smart accounts via abstractionkit.",
       "version": "0.1.0",
       "category": "web3",
       "keywords": ["account-abstraction", "erc-4337", "smart-wallet", "passkeys"]

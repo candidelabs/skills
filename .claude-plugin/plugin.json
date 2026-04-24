@@ -1,7 +1,7 @@
 {
   "name": "candide",
   "version": "0.1.0",
-  "description": "Candide skills for building smart wallets, forwarding addresses, passkey signing, and account abstraction on EVM chains.",
+  "description": "Candide skills: cross-chain forwarding addresses and multichain smart accounts via abstractionkit.",
   "author": {
     "name": "Candide Labs",
     "url": "https://candide.dev"
@@ -14,7 +14,6 @@
     "erc-4337",
     "smart-wallet",
     "passkeys",
-    "paymaster",
     "forwarding-address",
     "candide"
   ]
