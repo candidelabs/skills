@@ -4,17 +4,26 @@ This repository primarily targets Claude plugin discovery, but it also exposes a
 
 ## Install
 
-1. Clone the repository:
-   ```sh
-   git clone https://github.com/candidelabs/skills.git ~/.codex/candide-skills
-   ```
+### Option A: npx one-liner (recommended)
 
-2. Link the Codex-native skill directories into your Codex skills directory:
-   ```sh
-   ~/.codex/candide-skills/.codex/scripts/install-for-codex.sh
-   ```
+Requires Node 18+ and git.
 
-3. Restart Codex so it discovers the new skills.
+```sh
+npx -y github:candidelabs/skills
+```
+
+This clones the repo into `~/.candide-skills` (or `$CANDIDE_SKILLS_DIR` if set) and symlinks each skill into `~/.codex/skills/`. Re-run the same command to pull the latest changes.
+
+### Option B: manual clone
+
+```sh
+git clone https://github.com/candidelabs/skills.git ~/.candide-skills
+~/.candide-skills/.codex/scripts/install-for-codex.sh
+```
+
+Update with `git -C ~/.candide-skills pull` and re-run the script.
+
+After either option, restart Codex so it discovers the new skills.
 
 ## Verify
 
