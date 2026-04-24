@@ -1,0 +1,21 @@
+{
+  "name": "@candidelabs/skills",
+  "version": "0.1.0",
+  "description": "Installer for Candide agent skills — smart wallet infrastructure for EVM chains",
+  "bin": {
+    "candide-skills": "bin/install.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/candidelabs/skills.git"
+  },
+  "homepage": "https://github.com/candidelabs/skills",
+  "license": "MIT",
+  "files": [
+    "bin",
+    "scripts"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}

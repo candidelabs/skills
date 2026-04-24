@@ -20,9 +20,19 @@ Agent skills for building on [Candide](https://candide.dev) — smart wallet inf
 
 **OpenAI Codex CLI**
 
+One-liner (requires Node + git):
+
 ```bash
-git clone https://github.com/candidelabs/skills ~/.codex/candide-skills
-~/.codex/candide-skills/.codex/scripts/install-for-codex.sh
+npx -y github:candidelabs/skills
+```
+
+Clones the repo into `~/.candide-skills` and symlinks each skill into `~/.codex/skills/` with a `candide-` prefix. Re-run the same command to update.
+
+Or clone manually:
+
+```bash
+git clone https://github.com/candidelabs/skills ~/.candide-skills
+~/.candide-skills/.codex/scripts/install-for-codex.sh
 ```
 
 **Copilot CLI / Gemini CLI / other harnesses**
