@@ -1,194 +1,95 @@
 ---
 name: safe-unified-account
-description: Use when integrating Candide's Safe Unified Account for multichain smart accounts and chain abstraction with the abstractionkit SDK — building apps that execute operations across multiple EVM chains with a single signature. Triggers on mentions of Safe Unified Account, multichain smart account, chain abstraction, abstractionkit, SafeAccount, ERC-4337 across chains, multichain UserOperation, or single-signature multichain execution.
+description: Use when integrating Candide's Safe Unified Account or `abstractionkit` for multichain smart accounts across EVM chains. Triggers on Safe Unified Account, multichain smart account, chain abstraction, abstractionkit, multichain UserOperation, single-signature multichain execution, or unified balance UX questions.
 ---
 
-# Safe Unified Account Integration
+# Safe Unified Account — Best Practices
 
-Single smart account across every EVM chain. One signature executes operations on all chains simultaneously. Built on [abstractionkit](https://docs.candide.dev) SDK.
+One smart account, deterministic address across every EVM chain, single signature executes on N chains. This skill is judgment for integration. SDK shapes, method signatures, and concrete code live in the docs and the example repo — fetch them when you write code.
 
-## Source Priority
+## Source priority
 
-When writing code, follow this order strictly:
+1. **Docs** — https://docs.candide.dev/wallet/guides/chain-abstraction-overview/ — authoritative for SDK version, supported chains, endpoints, method names
+2. **Examples** — https://github.com/candidelabs/abstractionkit-examples/tree/main/chain-abstraction — minimal, copy-pasteable scripts for the multichain flow (ECDSA and passkey variants)
 
-1. **Docs** — https://docs.candide.dev/wallet/guides/chain-abstraction-overview/
-2. **Examples** — https://github.com/candidelabs/abstractionkit-examples — read `chain-abstraction/add-owner.ts` (ECDSA) or `chain-abstraction/add-owner-passkey.ts` (passkey)
-3. **Demo repo** — https://github.com/candidelabs/safe-unified-account-demo — reference `src/logic/userOp.ts` for orchestrator and `src/components/SafeCard.tsx` for failure handling
+Do not invent SDK calls. If a method or parameter is not in the docs or examples, fetch them before guessing.
 
-**Do NOT invent API calls.** Copy method signatures, parameter types, and return types from the sources above. If a method or parameter is not in the docs or examples, do not use it.
+## Discover before you code
 
-### When sources disagree
+Ask the developer all four before producing any plan or code. None are optional — the shape of the integration changes with each.
 
-- **Examples** win for: exact SDK call shapes, method parameters, return types, import paths — these are the most up-to-date code
-- **Docs** win for: SDK version, supported chains, endpoint URLs, paymaster policy, SDK reference
-- **Demo repo** is a reference only — useful for seeing patterns (failure handling, retry logic, UI state) but may lag behind the SDK. Do not copy from the demo if it contradicts the examples or docs.
+1. **What are they integrating?** Signer management, guardians for social recovery, value movement (transfers, swaps), unified balance UX, or arbitrary multichain MetaTransactions. The orchestrator pattern is the same; the UX surface and risk model are not.
+2. **Signer type.** ECDSA private keys (simpler) or passkeys (WebAuthn P-256, hands off to the passkey skill for credential creation and signing).
+3. **Paymaster.** App-sponsored gas, ERC-20 token paymaster, or self-funded. Decision applies to every chain.
+4. **Target chains.** Validate against the docs' supported list. If unsure, suggest two Sepolia-family testnets — zero signup. Distinguish the two chain roles below.
 
-## Execution Rules
+## Two chain models to surface
 
-**Write code immediately after reading the sources.** Do not stop at architectural advice, design suggestions, or summaries unless the developer explicitly asked for design-only guidance. The default is implementation, not commentary.
+- **Account chains** — chains where the Safe runs UserOperations. Need bundler, paymaster, and a separate JSON-RPC. At least two for the multichain story to mean anything. Funds held here can be moved by the Safe directly.
+- **Destination-only chains** — outbound payout targets. The Safe itself never operates here, but the user sends *out of* their Safe to recipients on these chains via a bridge fill. Useful when the Safe lives on Optimism and Arbitrum and the user needs to pay an address on Ethereum mainnet.
 
-**Prefer adapting to the existing stack.** For existing projects (Q1), integrate into the developer's current file structure, frameworks, and patterns. Do not introduce new frameworks, restructure their project, or create duplicate abstractions. If they use Redux, use Redux. If they use plain React state, use plain React state. Minimal footprint.
+Surface this distinction; do not flatten "chains" into a single list. The endpoint requirements differ too — destination-only chains need only an RPC (for recipient balance reads and bridge-fill polling), no bundler or paymaster.
 
-**After implementation, report what you built.** List each file you created or modified and state which of the 4 required outputs it contains. Example: "`src/lib/unified-account.ts` — contains chain config (#1), account init (#2), and orchestrator (#3). `scripts/verify.ts` — verification script (#4)."
+## Three endpoints per chain — the most common mistake
 
-## Before You Start
+Each account chain needs **three separate URLs**:
 
-Ask the developer these 4 questions before writing any code:
+1. **Bundler** (Candide) — exposes ERC-4337 bundler methods (`eth_sendUserOperation`, `eth_estimateUserOperationGas`, `eth_getUserOperationReceipt`, etc.)
+2. **Paymaster** (Candide) — exposes paymaster methods for gas sponsorship or token payment
+3. **Execution-client RPC** — exposes standard methods (`eth_call`, `eth_getBalance`, `eth_getTransactionCount`, `eth_gasPrice`, etc.) for reading account state, nonces, balances, gas prices. Use publicnode, drpc, Infura, Alchemy, or similar.
 
-**Q1: New app or existing project?**
-- New app → scaffold project with dependencies, tsconfig, env/config file
-- Existing → install `abstractionkit` into their project, add chain config. Do not over-scaffold.
+All three are JSON-RPC endpoints — the distinction is the *method set* each implements. Candide's public endpoint serves bundler and paymaster methods; it does not serve execution-client methods, so a separate RPC is required for state reads.
 
-**Q2: Signer type?**
-- **ECDSA private keys** — simpler integration. One method call handles multichain signing.
-- **Passkeys (WebAuthn P-256)** — requires the **passkey integration skill** (see Passkey Handoff below). This skill owns the multichain flow; the passkey skill owns credential creation, storage, and signing.
+## Unified balance is two separate problems
 
-**Q3: Paymaster — who pays for gas?**
-- **Gas sponsorship** (CandidePaymaster) — app sponsors gas, free for users. Uses two-phase commit/finalize.
-- **ERC-20 token payment** — user pays gas in tokens (USDC, etc). Uses `createTokenPaymasterUserOperation()`.
+Surface both to the developer; they are routinely conflated.
 
-**Q4: Which chains?**
-- Developer names their target chains (e.g., "Ethereum + Optimism + Base")
-- If unsure, suggest 2-3 Sepolia testnets to start — zero signup required
-- Fetch the current supported chain list from https://docs.candide.dev/wallet/bundler/rpc-endpoints/ — do not hardcode
+- **Display side.** "One USDC balance" means summing per-chain ERC-20 balances client-side. Always offer a per-chain breakdown on demand — users need to know where their funds physically live.
+- **Spending side.** Sending more on a destination than the Safe holds there requires a **bridge**. The SDK does not bridge for you. The developer chooses: Across, CCTP, LayerZero, Hop, Stargate, and others — each with different tradeoffs around speed, fees, supported tokens, finality, and trust assumptions. Surface the choice; do not pick for them. If they're unsure, name the candidates and the axes (speed, fees, token support, trust model) so they can decide.
 
-**Then, before writing code:**
-- Fetch the recommended SDK version from the docs (Source #1) — install whichever version the docs specify
-- Read the matching code example (Source #2) end-to-end before writing anything
+The mechanical pattern, regardless of bridge: encode the bridge's deposit call as a MetaTransaction on the source chain, track the destination fill independently, gross-up the input so the recipient lands a clean amount.
 
-## Required Outputs
+## No cross-chain atomicity — design for it
 
-You MUST produce these four building blocks. Adapt file structure to the developer's project, but all four must exist:
+The single most-violated best practice. UserOps can succeed on chain A and fail on chain B. The application MUST handle this; the SDK will not.
 
-**1. Chain configuration** — `ChainConfig` object or loader with per-chain:
-- `chainId: bigint`
-- `bundlerUrl: string` — Candide endpoint
-- `rpcUrl: string` — standard JSON-RPC provider (NOT Candide — see gotcha below)
-- `paymasterUrl: string` — Candide endpoint
+- **Per-chain status.** Each chain independently tracks `preparing → signing → pending → success | error`, with its own userOpHash, txHash, and error fields. Never report a single aggregate result to the user.
+- **Retry only the failed chains.** Nonces are per-chain — a retry of chain B does not interact with chain A's already-included op. A new signature is required: the original is bound to the original multichain hash, which included the failed op.
+- **Security ops vs value ops.** Security ops (add/remove owner, threshold change, enable module, add guardian) are idempotent — retry until convergent. Value ops (transfers, swaps, bridge deposits) may not be safely retryable; check on-chain state before resubmitting.
 
-**2. Account initialization** — function that:
-- Takes an owner (ECDSA address or passkey public key coordinates)
-- Returns a `SafeAccount` instance with deterministic address
-- Handles both new accounts (`initializeNewAccount`) and existing (`new SafeAccount(address)`)
+## Pre-submission consistency check (security ops only)
 
-**3. Multichain signing orchestrator** — function that:
-- Takes: MetaTransactions (per chain or shared), chain configs, signer credentials
-- Executes the 6-step flow (build txs → create userOps → paymaster commit → sign → paymaster finalize → send)
-- Returns: per-chain results where each chain independently tracks `userOpHash`, `txHash`, and `error` fields through the lifecycle: preparing → signing → pending → success (or error)
-- Uses `Promise.allSettled()` for sending (NOT `Promise.all()`)
-- Implements retry logic for failed chains
+Before any multichain security operation, read the relevant state on every target chain in parallel and verify they agree. If a previous partial failure left configs diverged, surface the diff and let the user choose to sync rather than blindly proceeding. Diverged guardian sets, owner sets, and thresholds are silent footguns and degrade recovery guarantees.
 
-**4. Verification script** — standalone script that:
-- Auto-generates an ECDSA keypair (no browser needed)
-- Runs the full flow on the developer's configured testnet chains
-- Verifies the operation succeeded on all chains (e.g., `getOwners()`)
-- Prints per-chain results
-- Based on the ECDSA example from Source #2
-- Runs with `npx tsx verify.ts`
+## Gas estimation fragility
 
-## Setup
+Paymaster default bumps are not always enough. Two known categories of pain:
 
-Install `abstractionkit` as the core dependency. For utility functions (key generation, address derivation), use whichever Ethereum library the developer already has — **viem** or **ethers**. Both work with abstractionkit. Do not add viem to a project that already uses ethers, or vice versa.
+- **Rollup calldata pricing** (Arbitrum and similar) — `preVerificationGas` may need a higher multiplier because rollups bill calldata heavily.
+- **WebAuthn signature size** — P-256 verification cost can exceed default `verificationGasLimit` bumps; symptom is AA26 errors on signature verification.
 
-If passkeys chosen, the passkey skill specifies additional dependencies.
+The SDK and paymaster expose knobs for both. Developers should not need them on day one — surface only when they hit a symptom, then point to the docs for current parameter names.
 
-## Chain Configuration Gotcha
+## Passkey handoff
 
-Each chain needs **three separate endpoints** — this is the most common integration mistake:
+If passkeys are chosen, the passkey skill owns credential creation, storage, and the WebAuthn signature step. This skill still owns chain configuration, account initialization (consuming public key coordinates from the passkey skill), orchestration shape, paymaster phases, partial-failure handling, and retry. The passkey example in the examples repo shows the exact interface — do not invent it.
 
-1. **Bundler URL** — Candide endpoint, for submitting UserOperations
-2. **Paymaster URL** — Candide endpoint, for gas sponsorship or token payment
-3. **JSON-RPC provider URL** — standard RPC (NOT Candide), for reading state, nonces, gas prices
+## Verification before claiming done
 
-The Candide public endpoint (`https://api.candide.dev/public/v3/{chainId}`) serves as both bundler and paymaster, but it is NOT a JSON-RPC provider. The developer needs a separate RPC per chain (e.g., `publicnode.com`, `drpc.org`, Infura, Alchemy).
+Inspecting the orchestrator code is not enough. Exercise the unhappy paths.
 
-Validate the developer's chain choices against https://docs.candide.dev/wallet/bundler/rpc-endpoints/ (same page as Q4). For the public endpoint URL pattern, see https://docs.candide.dev/wallet/bundler/public-endpoints/. For higher rate limits: [Candide Dashboard](https://dashboard.candide.dev/).
+- Run end-to-end on at least two testnet account chains.
+- Prove the partial-failure path: force one chain to fail (kill an RPC, point at a wrong bundler, etc.) and verify the UI surfaces it and retry-only-failed works.
+- For security ops, prove the pre-submission consistency check actually catches a diverged state.
 
-## Core Multichain Flow
+## Red flags
 
-The orchestrator follows a 6-step flow. Get the exact code from Sources #1 and #2. Here is the conceptual flow — do not implement from this description alone:
-
-1. **Build MetaTransactions** — operation-agnostic: any `{ to, value, data }` works. Same tx for all chains, or different per chain.
-2. **Create UserOperations per chain** — one `createUserOperation()` call per chain.
-3. **Paymaster commit** — `signingPhase: "commit"` on each chain. For token paymaster, use `createTokenPaymasterUserOperation()`.
-4. **Sign** — ECDSA: single `signUserOperations()` call. Passkeys: delegate to passkey skill (see Passkey Handoff).
-5. **Paymaster finalize** — `signingPhase: "finalize"` to seal paymaster data after signing.
-6. **Send concurrently** — `Promise.allSettled()`, then `response.included()` for each.
-
-## Passkey Handoff
-
-This skill owns the multichain flow. The passkey skill owns WebAuthn. The interface between them:
-
-**This skill provides to the passkey skill:**
-- `userOpsToSign`: array of `{ userOperation: UserOperationV9, chainId: bigint }` — the committed, unsigned operations
-
-**This skill expects back from the passkey skill:**
-- `signatures`: `string[]` — one hex-encoded signature per chain, in the same order as `userOpsToSign`
-- Each signature is the output of `formatSignaturesToUseroperationsSignatures()`, already formatted for the UserOperation
-
-**This skill still owns** (even when passkeys are chosen):
-- Steps 1-3 (build txs, create userOps, paymaster commit)
-- Steps 5-6 (paymaster finalize, send)
-- Partial failure handling and retry
-- Chain configuration and account initialization (using public key coordinates from the passkey skill)
-
-## Paymaster Integration
-
-Two options, both using the same two-phase commit/finalize pattern:
-
-**Gas sponsorship** (`createSponsorPaymasterUserOperation`): App pays gas. Optional `sponsorshipPolicyId` for gated policies.
-
-**ERC-20 token payment** (`createTokenPaymasterUserOperation`): User pays in tokens. Paymaster auto-prepends token approval. Same two-phase pattern.
-
-Both call the paymaster twice: before signing (commit) and after (finalize).
-
-## Partial Failure Handling
-
-**There is no cross-chain atomicity.** A UserOp can succeed on chain A and fail on chain B. The application MUST handle this. The docs and examples show the happy path — this section covers what they don't.
-
-### Per-chain status tracking
-
-Track independent status per chain through the lifecycle: preparing → signing → pending → success (or error). Each chain entry must independently track `userOpHash`, `txHash`, and `error` fields. Always use `Promise.allSettled()`. Reference `src/components/SafeCard.tsx` in Source #3 for the pattern.
-
-### Retry failed chains
-
-1. Store original transactions for resubmission
-2. Identify failed chain indices
-3. Rebuild UserOps for only the failed chains
-4. Run full sign-and-send flow for the failed subset (new signature required)
-5. Update status per chain
-
-Nonces are per-chain — retrying failed chains does not conflict with succeeded ones.
-
-### Account security operations vs value operations
-
-**Account security ops** (add/remove owner, change threshold, enable module): Partial failure = different security configs across chains. App MUST surface this and provide retry/sync. Retrying is safe — idempotent.
-
-**Value ops** (transfers, swaps): May not be safely retryable. Show per-chain results, let user decide.
-
-### Pre-submission consistency check
-
-Before multichain security operations, verify account state is consistent across all target chains. If a previous partial failure left different configs, warn before proceeding.
-
-### Key persistence
-
-- **ECDSA**: Developer stores private key securely (env var, encrypted store, hardware module).
-- **Passkeys**: Handled by the passkey skill.
-
-## Verification Checklist
-
-Before claiming the integration is complete, verify these four paths work:
-
-1. **Account init** — `SafeAccount.initializeNewAccount()` returns a valid account with deterministic address
-2. **Multichain send** — the orchestrator successfully sends UserOps to at least 2 testnet chains and both confirm
-3. **Per-chain status** — the orchestrator correctly reports independent status per chain (not a single aggregate)
-4. **Retry path** — if one chain is simulated as failed (or actually fails), the retry logic rebuilds and resends only the failed chain
-
-Run the verification script to prove paths 1 and 2. Inspect the orchestrator code for paths 3 and 4.
-
-## Additional References
-
-- [Supported networks](https://docs.candide.dev/wallet/bundler/rpc-endpoints/)
-- [Public endpoints](https://docs.candide.dev/wallet/bundler/public-endpoints/)
-- [Passkeys integration guide](https://docs.candide.dev/wallet/plugins/passkeys/)
-- [Candide Dashboard](https://dashboard.candide.dev/) — dedicated endpoints with higher rate limits
+| Symptom | Stop and do this |
+|---------|------------------|
+| About to write code without answering the four discovery questions | Ask first. The shape changes with each. |
+| About to pick a bridge for the developer | Surface the options and the axes. Their call. |
+| Conflating "display balance" with "spending balance" | Name them as separate problems. Different solutions. |
+| About to invent or guess an SDK method name | Fetch the docs. Do not guess. |
+| Single `Promise.all` wrapping the whole flow | Per-chain status; `allSettled` at send time. |
+| Claiming "done" without exercising a failure path | Not done. Force a failure and watch retry behave. |
+| Sending `eth_call` / `eth_getBalance` to the Candide endpoint | Candide serves bundler + paymaster methods, not execution-client methods. Use a separate RPC for state reads. |
