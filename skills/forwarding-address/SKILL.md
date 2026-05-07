@@ -50,7 +50,8 @@ Follow this implementation order:
 
 1. Set up the JSON-RPC client (see Protocol section below)
 2. Query `forwarding_getRoutes` (once per source chain) to discover supported routes and tokens
-3. Implement address generation (`forwarding_getAddress` + `forwarding_activate`)
+3. Implement address generation (`forwarding_getAddress` + `account_activateForwardingAddress`)
+   - The activation call requires `Authorization: Bearer <account_api_key>` (admin-issued by Candide). Other methods are public.
 4. Add user-input validation with `forwarding_getMinimumAmount` before any fee estimation
 5. Add fee estimation if needed (`forwarding_estimateOutput`)
 6. Add TTL check: re-activate if expired before presenting the address to the user
@@ -85,9 +86,9 @@ For full parameter tables and response schemas, see the [API Reference](https://
 - **`forwarding_getRoutes`**: Returns all routes from a given source chain with accepted tokens and fees. Takes a required `sourceChainId`. Call once per source chain to build the full picture of supported destinations and tokens. Single source of truth for what is supported.
 - **`forwarding_getMinimumAmount`**: Returns per-bridge minimum deposit amounts for a given source chain, destination chain, and token. Call this before `forwarding_estimateOutput` to validate user input. Minimums are bridge-specific and can change.
 - **`forwarding_getAddress`**: Computes a deterministic deposit address from `recipient`, `custodialWithdrawer`, `destinationChainId`, and optional `salt`. Pure computation, no side effects. Same inputs always return the same address.
-- **`forwarding_activate`**: Starts relayer monitoring on the specified source chains with a TTL. The destination chain is automatically included for same-chain forwarding. Idempotent: calling again resets the TTL. Required before deposits will be forwarded.
+- **`account_activateForwardingAddress`**: Starts relayer monitoring on the specified source chains with a TTL. The destination chain is automatically included for same-chain forwarding. Idempotent: calling again resets the TTL. Required before deposits will be forwarded. Requires `Authorization: Bearer <account_api_key>` (admin-issued). Each account can have up to 500 active forwarding addresses; refreshing an existing one does not count against the cap (error `-32013` if exceeded).
 - **`forwarding_getActivation`**: Checks whether the relayer is monitoring a forwarding address. Tracks activation status only, not deposit completion.
-- **`forwarding_estimateOutput`**: Estimates what the recipient receives after relayer and bridge protocol fees for a given route, token, and amount. Returns the selected `bridge` alongside the output amount. Does not require an activated address.
+- **`forwarding_estimateOutput`**: Estimates what the recipient receives after relayer and bridge protocol fees for a given route, token, and amount. Returns the selected `bridge` alongside the output amount. Does not require an activated address. Same-chain forwards return `relayerBotFee: "0"`.
 
 ---
 
@@ -123,16 +124,18 @@ Do not skip these.
 3. Never suggest sending below the bridge minimum. Call `forwarding_getMinimumAmount` for the exact source chain, destination chain, and token; a deposit below every bridge's `minAmount` will not be forwarded. Convert `minAmount` to human-readable using the source token's `decimals` when presenting to users.
 4. The forwarding address accepts deposits on any supported chain, including the destination chain itself. Check `forwarding_getRoutes` to confirm which chains are supported for a given route.
 5. Activation is required. An address that is not activated (or has expired) will not have deposits forwarded. Always activate after computing the address.
-6. There is no webhook for deposit completion. `forwarding_getActivation` checks if monitoring is active, not if a deposit was forwarded. To confirm arrival, poll the recipient's balance on the destination chain. Typical latency is 10 to 20 seconds.
-7. Amounts are always in smallest unit. 1 ETH = `"1000000000000000000"` (18 decimals). 1 USDT = `"1000000"` (6 decimals). Use the token's `decimals` field for conversion.
+6. The activation call (`account_activateForwardingAddress`) requires `Authorization: Bearer <account_api_key>` — get one from Candide. Other methods are public. Never embed this key in client-side code (browser, mobile, or any user-distributed binary). Call activation from a backend you control and expose a thin endpoint to your client.
+7. There is no webhook for deposit completion. `forwarding_getActivation` checks if monitoring is active, not if a deposit was forwarded. To confirm arrival, poll the recipient's balance on the destination chain. Typical latency is 10 to 20 seconds.
+8. Amounts are always in smallest unit. 1 ETH = `"1000000000000000000"` (18 decimals). 1 USDT = `"1000000"` (6 decimals). Use the token's `decimals` field for conversion.
 
 ## Common Mistakes
 
 - **Hardcoding chain IDs or token addresses.** Routes change. Always read them from `forwarding_getRoutes`.
-- **Forgetting to activate.** Computing an address with `forwarding_getAddress` does not start monitoring. You must call `forwarding_activate` or deposits will not be forwarded.
+- **Forgetting to activate.** Computing an address with `forwarding_getAddress` does not start monitoring. You must call `account_activateForwardingAddress` (with the bearer account API key) or deposits will not be forwarded.
 - **Confusing `forwarding_getActivation` with deposit tracking.** It only checks whether the relayer is monitoring, not whether a deposit arrived. Poll the recipient's balance on the destination chain instead.
 - **Setting `custodialWithdrawer` to the user's address in a non-custodial app.** If the user funded from an exchange, they cannot recover stuck funds. Use the company's secure wallet.
-- **Ignoring TTL expiration.** Before presenting a forwarding address, check activation status and call `forwarding_activate` again if the TTL has expired.
+- **Ignoring TTL expiration.** Before presenting a forwarding address, check activation status and call `account_activateForwardingAddress` again if the TTL has expired.
+- **Embedding the account API key in client-side code.** Mobile and web clients can be decompiled or inspected. The bearer key must live on a server you control; clients call your backend, your backend calls `account_activateForwardingAddress`.
 
 ## Validation Rules
 
@@ -144,3 +147,4 @@ Apply before making API calls:
 4. Amounts must be decimal strings in smallest unit (no floating point). Must be greater than or equal to the bridge minimum returned by `forwarding_getMinimumAmount` for the same source chain, destination chain, and token.
 5. `custodialWithdrawer` should be the company's secure wallet for most integrations.
 6. `salt`: only use if the developer needs multiple addresses for the same recipient + destination.
+7. The account API key must be loaded from a server-side secret store (env var, secrets manager). Never bundle it into client builds, commit it, or pass it through to the browser/mobile app.
