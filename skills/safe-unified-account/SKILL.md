@@ -1,6 +1,6 @@
 ---
 name: safe-unified-account
-description: Use when integrating Candide's Safe Unified Account or `abstractionkit` for multichain smart accounts across EVM chains. Triggers on Safe Unified Account, multichain smart account, chain abstraction, abstractionkit, multichain UserOperation, single-signature multichain execution, or unified balance UX questions.
+description: Use when integrating Candide's Safe Unified Account or `abstractionkit` for multichain smart accounts across EVM chains, including unified balance / cross-chain transfer flows over USDC or USDT. Triggers on Safe Unified Account, multichain smart account, chain abstraction, abstractionkit, multichain UserOperation, single-signature multichain execution, unified balance UX, cross-chain transfer, Across bridge integration, or SpokePool depositV3.
 ---
 
 # Safe Unified Account — Best Practices
@@ -11,6 +11,7 @@ One smart account, deterministic address across every EVM chain, single signatur
 
 1. **Docs** — https://docs.candide.dev/wallet/guides/chain-abstraction-overview/ — authoritative for SDK version, supported chains, endpoints, method names
 2. **Examples** — https://github.com/candidelabs/abstractionkit-examples/tree/main/chain-abstraction — minimal, copy-pasteable scripts for the multichain flow (ECDSA and passkey variants)
+3. **Reference demo (unified balance + bridge)** — https://github.com/candidelabs/safe-unified-account-demo — full React app demonstrating one viable shape of the integration. Read it as an example, not as a template. The skill's job is to surface the decisions a developer must make; their answers will shape the integration differently.
 
 Do not invent SDK calls. If a method or parameter is not in the docs or examples, fetch them before guessing.
 
@@ -48,6 +49,29 @@ Surface both to the developer; they are routinely conflated.
 - **Spending side.** Sending more on a destination than the Safe holds there requires a **bridge**. The SDK does not bridge for you. The developer chooses: Across, CCTP, LayerZero, Hop, Stargate, and others — each with different tradeoffs around speed, fees, supported tokens, finality, and trust assumptions. Surface the choice; do not pick for them. If they're unsure, name the candidates and the axes (speed, fees, token support, trust model) so they can decide.
 
 The mechanical pattern, regardless of bridge: encode the bridge's deposit call as a MetaTransaction on the source chain, track the destination fill independently, gross-up the input so the recipient lands a clean amount.
+
+## Bridge integration — properties to enforce
+
+Whatever bridge the developer picks, their integration must have these properties. Surface as principles; the implementation is theirs.
+
+- **Display balance tolerates a dead RPC.** Read per-chain balances with a settle-each-independently primitive — a failing RPC degrades that chain to zero, not the whole total. Always preserve a per-chain breakdown.
+- **User enters the recipient's amount, not the sender's.** Bridge fees are charged on input; the spender thinks in output. Splitting logic grosses input up from a target output using fresh bridge quotes. Asking the user to math fees is a UX failure.
+- **Prefer local before bridging.** If the destination is also an account chain, consume its local balance first — a direct `transfer()` is cheaper and faster. Bridge only the residual.
+- **The split must be explainable.** Whatever weighting the developer picks (largest-balance-first, lowest-fee-first, fixed priority), the user sees which chains contributed and how much. Keep it deterministic so the signed preview matches execution.
+- **Fees can make a split infeasible — handle it.** A chain may have enough for the leg but not for leg-plus-fees. Either redistribute to a chain with headroom or fail with a clear "insufficient unified balance after fees". Redistribution must terminate — bound it.
+- **Quotes are time-bounded.** Quotes carry freshness windows (timestamps, fill deadlines). If user signing is slow (passkey, hardware wallet), re-quote before submitting; never sign against a stale quote.
+- **Bridge status is independent from UserOp status.** A successful source UserOp means the deposit landed, not that the recipient was paid. Track and surface bridge fill per leg, alongside per-chain UserOp status. "Sent" is not "delivered."
+
+These are bridge-shape-agnostic — they apply to Across, CCTP, LayerZero, Hop, Stargate alike. The specific endpoints, call shapes, and event names live in each bridge's docs.
+
+## USDC and USDT — token-shape decisions to surface
+
+The above assumes one canonical token per chain. Make the developer confront these before writing config:
+
+- **USDC** — 6 decimals on every supported chain. Two flavors exist in the wild: native USDC (issued by Circle) and bridged USDC (`USDC.e`, etc.). They are not the same ERC-20. Make the developer pick one flavor per chain and verify the bridge actually routes between the chosen pair — a mismatched route will fail to quote or land on the wrong asset.
+- **USDT** — 6 decimals on most chains, **but 18 on BSC**. Decimals must be per-chain, not a global constant. Have the developer source them from the token contract at config time rather than hardcoding.
+
+Surface the flavor and per-chain decimals choices in Phase 1 discovery. They are silent footguns if assumed.
 
 ## No cross-chain atomicity — design for it
 
@@ -93,3 +117,9 @@ Inspecting the orchestrator code is not enough. Exercise the unhappy paths.
 | Single `Promise.all` wrapping the whole flow | Per-chain status; `allSettled` at send time. |
 | Claiming "done" without exercising a failure path | Not done. Force a failure and watch retry behave. |
 | Sending `eth_call` / `eth_getBalance` to the Candide endpoint | Candide serves bundler + paymaster methods, not execution-client methods. Use a separate RPC for state reads. |
+| Hardcoding a single decimals value for the token across chains | Decimals vary (USDT is 18 on BSC, 6 elsewhere). Carry decimals per chain, sourced from the token contract. |
+| Mixing native USDC and bridged `USDC.e` without noticing | Different ERC-20s. Pick one flavor per chain and verify the bridge routes between the chosen pair. |
+| Asking the user to enter the input amount on the source | Users think in recipient output. Gross up input from output using fresh bridge quotes. |
+| Aggregating balance reads with a fail-fast primitive | One dead RPC zeroes out the unified balance. Use a settle-each primitive; degrade per chain. |
+| Treating a successful source-chain UserOp as "delivered" | Deposit landing ≠ recipient paid. Track and surface bridge fill status independently per leg. |
+| Signing a transfer against a stale bridge quote | Quotes carry freshness windows. Re-quote if signing was slow (passkey, hardware wallet). |
