@@ -68,8 +68,8 @@ These are bridge-shape-agnostic — they apply to Across, CCTP, LayerZero, Hop, 
 
 The above assumes one canonical token per chain. Make the developer confront these before writing config:
 
-- **USDC** — 6 decimals on every supported chain. Two flavors exist in the wild: native USDC (issued by Circle) and bridged USDC (`USDC.e`, etc.). They are not the same ERC-20. Make the developer pick one flavor per chain and verify the bridge actually routes between the chosen pair — a mismatched route will fail to quote or land on the wrong asset.
-- **USDT** — 6 decimals on most chains, **but 18 on BSC**. Decimals must be per-chain, not a global constant. Have the developer source them from the token contract at config time rather than hardcoding.
+- **USDC** — two flavors exist in the wild: native USDC (issued by Circle) and bridged USDC (`USDC.e`, etc.). They are not the same ERC-20. Make the developer pick one flavor per chain and verify the bridge actually routes between the chosen pair — a mismatched route will fail to quote or land on the wrong asset. Source decimals from each selected contract's `decimals()` at config time; do not assume a global constant.
+- **USDT** — source decimals from each selected contract's `decimals()` at config time, per chain. The common 6-decimals assumption breaks: USDT on BSC is 18. Treat any global decimals constant as a bug.
 
 Surface the flavor and per-chain decimals choices in Phase 1 discovery. They are silent footguns if assumed.
 
