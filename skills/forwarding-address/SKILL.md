@@ -11,9 +11,9 @@ You are integrating the Forwarding Address API: a JSON-RPC service that generate
 
 The API changes frequently. Always read the live docs for exact parameters, response schemas, and examples. Check the changelog first to see what changed recently.
 
-- **Changelog** (recent breaking changes and additions): https://docs.candide.dev/account-abstraction/research/forwarding-address-api#changelog
-- **API Reference** (parameters, response schemas, examples): https://docs.candide.dev/account-abstraction/research/forwarding-address-api
-- **Integration Guide** (patterns, TTL management, gotchas): https://docs.candide.dev/account-abstraction/research/forwarding-address-guide
+- **Changelog** (recent breaking changes and additions): https://docs.candide.dev/forwarding-address/api-reference#changelog
+- **API Reference** (parameters, response schemas, examples): https://docs.candide.dev/forwarding-address/api-reference
+- **Integration Guide** (patterns, TTL management, gotchas): https://docs.candide.dev/forwarding-address/integration-guide
 - **Recovery frontend** (for stuck funds): https://forwarding-address.candidelabs.com/
 
 ## Phase 1: Understand the Integration
@@ -37,14 +37,14 @@ Based on their answers, propose an approach before writing code. Cover:
 - How forwarding addresses are generated and stored
 - Whether `destinationChainId` is fixed or user-selected
 - TTL handling: re-activate on demand when the address is needed
-- How deposit arrival is detected (polling recipient balance on destination chain)
+- How deposit arrival is detected (poll `forwarding_getForwardsByRecipient`; polling recipient balance on the destination chain is a fallback)
 - Error handling and edge cases
 
 Get the developer's approval before proceeding to implementation.
 
 ## Phase 3: Implement
 
-Read the API Reference for full parameter details before writing code: https://docs.candide.dev/account-abstraction/research/forwarding-address-api
+Read the API Reference for full parameter details before writing code: https://docs.candide.dev/forwarding-address/api-reference
 
 Follow this implementation order:
 
@@ -55,7 +55,7 @@ Follow this implementation order:
 4. Add user-input validation with `forwarding_getMinimumAmount` before any fee estimation
 5. Add fee estimation if needed (`forwarding_estimateOutput`)
 6. Add TTL check: re-activate if expired before presenting the address to the user
-7. Add deposit arrival detection (poll recipient balance on destination chain)
+7. Add deposit arrival detection (poll `forwarding_getForwardsByRecipient`)
 
 ---
 
@@ -81,7 +81,7 @@ Successful responses have a `result` field. Errors have an `error` field with a 
 
 ### Method Summary
 
-For full parameter tables and response schemas, see the [API Reference](https://docs.candide.dev/account-abstraction/research/forwarding-address-api).
+For full parameter tables and response schemas, see the [API Reference](https://docs.candide.dev/forwarding-address/api-reference).
 
 - **`forwarding_getRoutes`**: Returns all routes from a given source chain with accepted tokens and fees. Takes a required `sourceChainId`. Call once per source chain to build the full picture of supported destinations and tokens. Single source of truth for what is supported.
 - **`forwarding_getMinimumAmount`**: Returns per-bridge minimum deposit amounts for a given source chain, destination chain, and token. Call this before `forwarding_estimateOutput` to validate user input. Minimums are bridge-specific and can change.
@@ -89,6 +89,9 @@ For full parameter tables and response schemas, see the [API Reference](https://
 - **`account_activateForwardingAddress`**: Starts relayer monitoring on the specified source chains with a TTL. The destination chain is automatically included for same-chain forwarding. Idempotent: calling again resets the TTL. Required before deposits will be forwarded. Requires `Authorization: Bearer <account_api_key>` (admin-issued). Each account can have up to 500 active forwarding addresses; refreshing an existing one does not count against the cap (error `-32013` if exceeded).
 - **`forwarding_getActivation`**: Checks whether the relayer is monitoring a forwarding address. Tracks activation status only, not deposit completion.
 - **`forwarding_estimateOutput`**: Estimates what the recipient receives after relayer and bridge protocol fees for a given route, token, and amount. Returns the selected `bridge` alongside the output amount. Does not require an activated address. Same-chain forwards return `relayerBotFee: "0"`.
+- **`forwarding_getForwardsByRecipient`**: Returns confirmed forwards for a `recipient` + `destinationChainId`. Primary way to track deposit status — use instead of polling the recipient's balance directly.
+- **`forwarding_getForwardsByTx`**: Same as above, keyed by `sourceChainId` + `sourceTxHash` instead of recipient.
+- **`forwarding_getForwardById`**: Resolves a single forward by its opaque `forwardId`, for cheaper targeted polling.
 
 ---
 
@@ -125,14 +128,14 @@ Do not skip these.
 4. The forwarding address accepts deposits on any supported chain, including the destination chain itself. Check `forwarding_getRoutes` to confirm which chains are supported for a given route.
 5. Activation is required. An address that is not activated (or has expired) will not have deposits forwarded. Always activate after computing the address.
 6. The activation call (`account_activateForwardingAddress`) requires `Authorization: Bearer <account_api_key>` — get one from Candide. Other methods are public. Never embed this key in client-side code (browser, mobile, or any user-distributed binary). Call activation from a backend you control and expose a thin endpoint to your client.
-7. There is no webhook for deposit completion. `forwarding_getActivation` checks if monitoring is active, not if a deposit was forwarded. To confirm arrival, poll the recipient's balance on the destination chain. Typical latency is 10 to 20 seconds.
+7. There is no webhook for deposit completion. `forwarding_getActivation` checks if monitoring is active, not if a deposit was forwarded. To confirm arrival, poll `forwarding_getForwardsByRecipient` for `status: "delivered"`; polling the recipient's balance on the destination chain directly is a fallback, not the primary method. Typical latency is 10 to 20 seconds.
 8. Amounts are always in smallest unit. 1 ETH = `"1000000000000000000"` (18 decimals). 1 USDT = `"1000000"` (6 decimals). Use the token's `decimals` field for conversion.
 
 ## Common Mistakes
 
 - **Hardcoding chain IDs or token addresses.** Routes change. Always read them from `forwarding_getRoutes`.
 - **Forgetting to activate.** Computing an address with `forwarding_getAddress` does not start monitoring. You must call `account_activateForwardingAddress` (with the bearer account API key) or deposits will not be forwarded.
-- **Confusing `forwarding_getActivation` with deposit tracking.** It only checks whether the relayer is monitoring, not whether a deposit arrived. Poll the recipient's balance on the destination chain instead.
+- **Confusing `forwarding_getActivation` with deposit tracking.** It only checks whether the relayer is monitoring, not whether a deposit arrived. Poll `forwarding_getForwardsByRecipient` instead.
 - **Setting `custodialWithdrawer` to the user's address in a non-custodial app.** If the user funded from an exchange, they cannot recover stuck funds. Use the company's secure wallet.
 - **Ignoring TTL expiration.** Before presenting a forwarding address, check activation status and call `account_activateForwardingAddress` again if the TTL has expired.
 - **Embedding the account API key in client-side code.** Mobile and web clients can be decompiled or inspected. The bearer key must live on a server you control; clients call your backend, your backend calls `account_activateForwardingAddress`.
