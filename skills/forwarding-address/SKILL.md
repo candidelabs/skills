@@ -1,153 +1,78 @@
 ---
 name: forwarding-address
-description: Use when integrating Candide's Forwarding Address API for cross-chain deposit address routing — generating deterministic deposit addresses, activating relayer monitoring, querying per-bridge minimum amounts, or estimating fees via JSON-RPC. Triggers on mentions of forwarding address, cross-chain deposit, deterministic address, custodialWithdrawer, or deposit routing.
+description: Use when building deposits on Candide's Forwarding Address — deterministic deposit addresses that accept tokens on any supported EVM chain and forward them to a recipient on a destination chain — through the JSON-RPC API or the WDK SDA module (@candidelabs/wdk-protocol-sda-candide). Covers architecture, the recovery wallet, address lifetime, minimums, and deposit tracking. Triggers on mentions of forwarding address, cross-chain deposit, deterministic deposit address, deposit routing, custodialWithdrawer, recoveryWithdrawer, WDK, Smart Deposit Address, SDA, or Tether wallet deposits.
 ---
 
-# Forwarding Address Integration Skill
+# Forwarding Address Integration
 
-You are integrating the Forwarding Address API: a JSON-RPC service that generates deterministic deposit addresses for asset routing. Users send tokens to a forwarding address on any supported chain (including the destination chain itself), and the tokens are automatically routed to the recipient's wallet on the destination chain.
+You are helping a developer accept deposits through Candide's Forwarding Address. A forwarding address is one deterministic address that accepts deposits on every supported EVM chain, including the destination chain itself, and forwards each token to a recipient on the destination chain. The address is a self-custodial contract: the recipient can always withdraw from it, and an optional company recovery wallet can recover stuck funds after a timelock.
 
-## Documentation
+This skill is Candide's recommendation on how to build the integration. It deliberately leaves out method names, parameters and response shapes, which change; take those from the reference for the path you choose.
 
-The API changes frequently. Always read the live docs for exact parameters, response schemas, and examples. Check the changelog first to see what changed recently.
+## Choose the integration path
 
-- **Changelog** (recent breaking changes and additions): https://docs.candide.dev/forwarding-address/api-reference#changelog
-- **API Reference** (parameters, response schemas, examples): https://docs.candide.dev/forwarding-address/api-reference
-- **Integration Guide** (patterns, TTL management, gotchas): https://docs.candide.dev/forwarding-address/integration-guide
-- **Recovery frontend** (for stuck funds): https://forwarding-address.candidelabs.com/
+Two paths, and the developer picks. The recommendations below apply to both.
 
-## Phase 1: Understand the Integration
+- **JSON-RPC API**: works from any stack. Reference and changelog: https://docs.candide.dev/forwarding-address/api-reference. Integration guide: https://docs.candide.dev/forwarding-address/integration-guide. Read the changelog first; the API evolves.
+- **WDK module** (`@candidelabs/wdk-protocol-sda-candide`): a JavaScript/TypeScript option for developers who prefer it. It implements Tether WDK's Smart Deposit Address interface (`SdaProtocol`), so it fits projects already built on WDK (`@tetherto/wdk*` dependencies). It derives every address client-side and checks it against the API's answer, and maps API errors onto WDK error classes. Its README is the reference and is written to be read in full: https://github.com/candidelabs/wdk-protocol-sda-candide
 
-Before writing any code, ask the developer:
+## Understand before building
 
-1. **What are you building?** (wallet, exchange, payment app, bot, other)
-2. **Tech stack?** (TypeScript/Node.js, Python, Go, etc.)
-3. **Does your company have a secure wallet that can serve as a recovery safety net?** This wallet becomes the `custodialWithdrawer`: a company-controlled address that can recover stuck funds on behalf of users. See the "Company Recovery Wallet" section below.
-4. **One destination chain or multichain?** If the app has one main destination chain, default all forwarding addresses to it. If users pick their destination chain, the integration needs a chain selector backed by `forwarding_getRoutes`.
-5. **One address per user, or one per transaction?** Determines whether to use the `salt` parameter.
-6. **Long-lived or short-lived addresses?** Long-lived addresses need a TTL check before each use to re-activate if expired.
+Ask the developer, and settle these before writing code, because each one changes the design:
 
-Do not proceed until you have clear answers. These choices shape the entire integration.
+1. **What are you building?** A wallet, exchange, payment app, bot. This decides who holds the recovery wallet and where activation runs.
+2. **Tech stack, and API or WDK module?** Offer the WDK module to JavaScript/TypeScript developers as an option, not a requirement.
+3. **Does the company have a secure wallet to act as the recovery wallet?** See "Recovery wallet" below.
+4. **One destination chain, or user-selected?** With one main chain, default every address to it. If users pick, the destination choices come from the supported routes, not from a hardcoded list.
+5. **One address per user, or per payment?** Several addresses for the same recipient and destination need distinct salts.
+6. **How long does a user keep an address?** Long-lived addresses need renewal built into the deposit screen.
 
-## Phase 2: Plan the Integration
+Then propose the plan below for the developer's stack and get their agreement before implementing.
 
-Based on their answers, propose an approach before writing code. Cover:
+## Recommended architecture
 
-- Where the API calls happen (backend service, frontend, serverless function)
-- How forwarding addresses are generated and stored
-- Whether `destinationChainId` is fixed or user-selected
-- TTL handling: re-activate on demand when the address is needed
-- How deposit arrival is detected (poll `forwarding_getForwardsByRecipient`; polling recipient balance on the destination chain is a fallback)
-- Error handling and edge cases
+**Activation runs on a backend; everything else can run anywhere.** Activating, renewing and recovering an address require the forwarding policy secret from the Candide dashboard. That secret sponsors activity under the company's policy, so it lives in a server-side secret store and never ships in a browser bundle, mobile app or other distributed binary. Reading routes, quoting, checking minimums, deriving addresses and following transfers need no secret, so a wallet client can do them directly. The usual shape: the client asks the company backend for an address, the backend activates it and returns it, and the client handles quoting and deposit tracking.
 
-Get the developer's approval before proceeding to implementation.
+**Verify addresses before showing them.** The address is a pure function of its derivation inputs (recipient, recovery wallet, destination chain, salt, and the deployment parameters). Derive it independently and compare it with what the API returns. The WDK module does this by default. On the API path, recommend the same check, and if the two disagree, don't fund either address and escalate to Candide.
 
-## Phase 3: Implement
+**Store the derivation inputs with the address.** Recipient, recovery wallet, destination chain and salt are needed to renew, recover or re-derive the address later. Changing any one of them produces a different address.
 
-Read the API Reference for full parameter details before writing code: https://docs.candide.dev/forwarding-address/api-reference
+## Recovery wallet
 
-Follow this implementation order:
+The API and contracts call it `custodialWithdrawer`; the WDK module calls it `recoveryWithdrawer`.
 
-1. Set up the JSON-RPC client (see Protocol section below)
-2. Query `forwarding_getRoutes` (once per source chain) to discover supported routes and tokens
-3. Implement address generation (`forwarding_getAddress` + `account_activateForwardingAddress`)
-   - The activation call requires `Authorization: Bearer <account_api_key>` (admin-issued by Candide). Other methods are public.
-4. Add user-input validation with `forwarding_getMinimumAmount` before any fee estimation
-5. Add fee estimation if needed (`forwarding_estimateOutput`)
-6. Add TTL check: re-activate if expired before presenting the address to the user
-7. Add deposit arrival detection (poll `forwarding_getForwardsByRecipient`)
+Two parties can withdraw from a forwarding address on a source chain: the recipient, immediately, and the recovery wallet, after a timelock. A user who funds the address from an exchange, or from any wallet they don't control on that chain, cannot send the withdrawal transaction themselves. Without a separate recovery wallet, funds stuck there are unrecoverable.
 
----
-
-## API Methods
-
-### Protocol
-
-JSON-RPC 2.0 over HTTP POST. Parameters are a single object inside a one-element array.
-
-```
-POST {FORWARDING_API_URL}
-Content-Type: application/json
-
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "method": "<method>",
-  "params": [{ <params_object> }]
-}
-```
-
-Successful responses have a `result` field. Errors have an `error` field with a `message` string.
-
-### Method Summary
-
-For full parameter tables and response schemas, see the [API Reference](https://docs.candide.dev/forwarding-address/api-reference).
-
-- **`forwarding_getRoutes`**: Returns all routes from a given source chain with accepted tokens and fees. Takes a required `sourceChainId`. Call once per source chain to build the full picture of supported destinations and tokens. Single source of truth for what is supported.
-- **`forwarding_getMinimumAmount`**: Returns per-bridge minimum deposit amounts for a given source chain, destination chain, and token. Call this before `forwarding_estimateOutput` to validate user input. Minimums are bridge-specific and can change.
-- **`forwarding_getAddress`**: Computes a deterministic deposit address from `recipient`, `custodialWithdrawer`, `destinationChainId`, and optional `salt`. Pure computation, no side effects. Same inputs always return the same address.
-- **`account_activateForwardingAddress`**: Starts relayer monitoring on the specified source chains with a TTL. The destination chain is automatically included for same-chain forwarding. Idempotent: calling again resets the TTL. Required before deposits will be forwarded. Requires `Authorization: Bearer <account_api_key>` (admin-issued). Each account can have up to 500 active forwarding addresses; refreshing an existing one does not count against the cap (error `-32013` if exceeded).
-- **`forwarding_getActivation`**: Checks whether the relayer is monitoring a forwarding address. Tracks activation status only, not deposit completion.
-- **`forwarding_estimateOutput`**: Estimates what the recipient receives after relayer and bridge protocol fees for a given route, token, and amount. Returns the selected `bridge` alongside the output amount. Does not require an activated address. Same-chain forwards return `relayerBotFee: "0"`.
-- **`forwarding_getForwardsByRecipient`**: Returns confirmed forwards for a `recipient` + `destinationChainId`. Primary way to track deposit status — use instead of polling the recipient's balance directly.
-- **`forwarding_getForwardsByTx`**: Same as above, keyed by `sourceChainId` + `sourceTxHash` instead of recipient.
-- **`forwarding_getForwardById`**: Resolves a single forward by its opaque `forwardId`, for cheaper targeted polling.
-
----
-
-## Company Recovery Wallet (`custodialWithdrawer`)
-
-**Set `custodialWithdrawer` to your company's secure wallet address.** This is a safety net: if funds get stuck in a forwarding address, the company can recover them on behalf of users.
-
-Every forwarding address has two parties that can withdraw from the deployed contract on the source chain:
-
-- The **recipient** can always withdraw immediately
-- The **`custodialWithdrawer`** (company's secure wallet) can withdraw after a timelock period
-
-Why this matters: if a user sends funds to the forwarding address from an exchange or any wallet they do not control on the source chain, and those funds get stuck, the user cannot send a withdrawal transaction on that chain. Without a separate `custodialWithdrawer`, those funds are permanently unrecoverable.
-
-| Scenario | `custodialWithdrawer` | Outcome |
+| Scenario | Recovery wallet | Outcome |
 |---|---|---|
-| Wallet or dapp (recommended) | Company's secure wallet | Company can recover stuck funds after timelock. User can always withdraw immediately |
-| Fully self-managed | Same as `recipient` | Only the user can recover. If they cannot transact on the source chain, funds are lost |
-| Custodial (exchanges, neobanks) | Company's secure wallet | Company recovers on behalf of user after timelock |
+| Wallet or dapp (recommended) | Company's secure wallet | Company can recover stuck funds after the timelock; the user can always withdraw immediately |
+| Fully self-managed | Same as the recipient | Only the user can recover; if they can't transact on the source chain, funds are lost |
+| Custodial (exchanges, neobanks) | Company's secure wallet | Company recovers on the user's behalf after the timelock |
 
-When the developer says "non-custodial", still recommend setting `custodialWithdrawer` to the company's secure wallet. Explain the exchange funding risk. Only set it to `recipient` if the developer explicitly understands and accepts the tradeoff.
+Recommend the company wallet even when the developer describes the app as non-custodial, and explain the exchange-funding risk. Set it to the recipient only when the developer understands and accepts that tradeoff. Users with stuck funds can also use the recovery frontend: https://forwarding-address.candidelabs.com/
 
-If funds need to be recovered, direct users to the recovery frontend: https://forwarding-address.candidelabs.com/
+## Address lifetime
 
----
+Monitoring is deliberately short-lived, because monitoring is what detects deposits and it costs money. An address that is not activated, or whose activation has expired, is not forwarded. A deposit that lands after expiry stays safe at the address and is forwarded once the address is renewed.
 
-## Hard Rules
+Show the expiry next to the address, and renew every time the deposit screen is opened. Renewal is idempotent and returns the new expiry, so renewing on display is cheaper and simpler than tracking expiries yourself. For a lapsed address that already holds a balance, recovery re-activates it so the next sweep picks the balance up. Recovery is a reindex: it sends no transaction and moves no funds.
 
-Do not skip these.
+## Routes, tokens and minimums
 
-1. Always call `forwarding_getRoutes` before any other call to verify the route exists. Never assume chain IDs, tokens, or fees.
-2. Never suggest sending unsupported tokens. Only tokens from the route's `tokens` array will be forwarded. Anything else gets stuck.
-3. Never suggest sending below the bridge minimum. Call `forwarding_getMinimumAmount` for the exact source chain, destination chain, and token; a deposit below every bridge's `minAmount` will not be forwarded. Convert `minAmount` to human-readable using the source token's `decimals` when presenting to users.
-4. The forwarding address accepts deposits on any supported chain, including the destination chain itself. Check `forwarding_getRoutes` to confirm which chains are supported for a given route.
-5. Activation is required. An address that is not activated (or has expired) will not have deposits forwarded. Always activate after computing the address.
-6. The activation call (`account_activateForwardingAddress`) requires `Authorization: Bearer <account_api_key>` — get one from Candide. Other methods are public. Never embed this key in client-side code (browser, mobile, or any user-distributed binary). Call activation from a backend you control and expose a thin endpoint to your client.
-7. There is no webhook for deposit completion. `forwarding_getActivation` checks if monitoring is active, not if a deposit was forwarded. To confirm arrival, poll `forwarding_getForwardsByRecipient` for `status: "delivered"`; polling the recipient's balance on the destination chain directly is a fallback, not the primary method. Typical latency is 10 to 20 seconds.
-8. Amounts are always in smallest unit. 1 ETH = `"1000000000000000000"` (18 decimals). 1 USDT = `"1000000"` (6 decimals). Use the token's `decimals` field for conversion.
+- **Read routes; never hardcode them.** Supported chains, tokens and fees come from the routes endpoint, queried per source chain. Only tokens listed for a route are forwarded; anything else sent to the address gets stuck until withdrawn.
+- **Check the minimum before telling a user what to send.** Each bridge has a minimum, and a deposit below every bridge's minimum is not forwarded. Minimums move with gas and token prices, so leave a margin above the current minimum and re-check it with a quote shortly before showing it.
+- **Quotes are estimates.** Present the output amount and fees as non-binding. When the company's policy sponsors fees, a quote for that specific address reflects it.
+- **Amounts are integers in the token's base units.** Convert with the token's `decimals` for display, and never round-trip through floating point.
 
-## Common Mistakes
+## Tracking deposits
 
-- **Hardcoding chain IDs or token addresses.** Routes change. Always read them from `forwarding_getRoutes`.
-- **Forgetting to activate.** Computing an address with `forwarding_getAddress` does not start monitoring. You must call `account_activateForwardingAddress` (with the bearer account API key) or deposits will not be forwarded.
-- **Confusing `forwarding_getActivation` with deposit tracking.** It only checks whether the relayer is monitoring, not whether a deposit arrived. Poll `forwarding_getForwardsByRecipient` instead.
-- **Setting `custodialWithdrawer` to the user's address in a non-custodial app.** If the user funded from an exchange, they cannot recover stuck funds. Use the company's secure wallet.
-- **Ignoring TTL expiration.** Before presenting a forwarding address, check activation status and call `account_activateForwardingAddress` again if the TTL has expired.
-- **Embedding the account API key in client-side code.** Mobile and web clients can be decompiled or inspected. The bearer key must live on a server you control; clients call your backend, your backend calls `account_activateForwardingAddress`.
+There is no webhook. Follow deposits by polling the transfer history for the address, or for the recipient on the destination chain, and treat a delivered transfer as done; typical latency is 10 to 20 seconds. Activation status only says whether the address is being monitored, not whether a deposit arrived. Polling the recipient's balance is a fallback, not the primary signal, because it can't attribute a balance change to a deposit.
 
-## Validation Rules
+## Common mistakes
 
-Apply before making API calls:
-
-1. Addresses must match `^0x[0-9a-fA-F]{40}$`
-2. Chain IDs must appear in `forwarding_getRoutes` results. Do not guess or hardcode.
-3. Token addresses must come from the route's `tokens` array for the chosen source-to-destination pair.
-4. Amounts must be decimal strings in smallest unit (no floating point). Must be greater than or equal to the bridge minimum returned by `forwarding_getMinimumAmount` for the same source chain, destination chain, and token.
-5. `custodialWithdrawer` should be the company's secure wallet for most integrations.
-6. `salt`: only use if the developer needs multiple addresses for the same recipient + destination.
-7. The account API key must be loaded from a server-side secret store (env var, secrets manager). Never bundle it into client builds, commit it, or pass it through to the browser/mobile app.
+- **Shipping the policy secret to a client.** Mobile and web builds can be inspected. Activation belongs on a backend.
+- **Computing an address and never activating it.** Derivation alone doesn't start monitoring.
+- **Activating once and never renewing.** A long-lived address shown after expiry silently stops forwarding until it is renewed.
+- **Setting the recovery wallet to the user in a "non-custodial" app.** Exchange-funded deposits then become unrecoverable.
+- **Hardcoding chain IDs, token addresses or minimums.** Routes and minimums change; read them at runtime.
+- **Treating activation status as delivery status.** Use the transfer history.
