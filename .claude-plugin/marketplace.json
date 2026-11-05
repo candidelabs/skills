@@ -14,7 +14,7 @@
         "repo": "candidelabs/skills"
       },
       "description": "Candide skills: cross-chain forwarding addresses and multichain smart accounts via abstractionkit.",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "category": "web3",
       "keywords": ["account-abstraction", "erc-4337", "smart-wallet", "passkeys"]
     }
