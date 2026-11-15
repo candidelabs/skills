@@ -1,11 +1,12 @@
 # Candide Skills
 
-Agent skills for building on [Candide](https://candide.dev) — smart wallet infrastructure for EVM chains. Each skill teaches AI coding assistants (Claude Code, Codex, Copilot CLI, Gemini) how to correctly integrate one Candide product.
+Agent skills for building on [Candide](https://candide.dev) — smart account infrastructure for wallets, payments and deposits, on EVM chains and Solana. Each skill teaches AI coding assistants (Claude Code, Codex, Copilot CLI, Gemini) how to correctly integrate one Candide product.
 
 ## Skills
 
 | Skill | What it covers |
 |-------|---------------|
+| [`overview`](skills/overview/SKILL.md) | Start here: maps a developer's use case to the right Candide products (accounts, signers, gas, Safe modules, deposits, Solana fees) and how they combine, then hands off to a product skill or docs page |
 | [`forwarding-address`](skills/forwarding-address/SKILL.md) | Cross-chain deposit address routing with deterministic addresses and a recovery withdrawer, via the JSON-RPC API or the WDK SDA module (`@candidelabs/wdk-protocol-sda-candide`) |
 | [`safe-unified-account`](skills/safe-unified-account/SKILL.md) | Multichain smart accounts with abstractionkit — one signature executes across every EVM chain |
 | [`safe-passkeys`](skills/safe-passkeys/SKILL.md) | Passkeys (WebAuthn P-256) as Safe signers — RP ID setup, signature assembly, synced vs device-bound credentials, recovery |
