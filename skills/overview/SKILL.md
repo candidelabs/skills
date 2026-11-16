@@ -41,8 +41,8 @@ Start from the closest row, adjust it to the answers, and confirm the plan with 
 | Actions on many EVM chains with one signature (add an owner or guardian everywhere, move balances) | Safe Unified Account multichain execution + paymaster | `safe-unified-account` skill |
 | Existing EOA users who should keep their address and get gasless, batched transactions | EIP-7702 Simple Account + paymaster | EIP-7702 entry in products.md |
 | Existing EOA users who also need passkeys, session keys or scoped keys | EIP-7702 Calibur Account + paymaster | EIP-7702 entry in products.md |
-| Dapp that wants to sponsor gas for any smart wallet user | Public gas policy (dashboard or Platform API) | Gas Policies entry in products.md |
 | Wallet that sponsors its own users | Private gas policy + paymaster | Gas Policies and Paymaster entries in products.md |
+| Dapp that wants to sponsor gas for any smart wallet user | Public gas policy (dashboard or Platform API) | Gas Policies entry in products.md |
 | Users who hold only stablecoins | Token paymaster (pay gas in ERC-20) on EVM, Solana Paymaster on Solana | Paymaster or Solana Paymaster entry in products.md |
 | App or wallet live on one or a few chains that must accept deposits from every chain | Forwarding Address, sending to the user's account on the app's chain | `forwarding-address` skill |
 | Invoicing or payment requests where payers use different chains | Forwarding Address, one address per invoice | `forwarding-address` skill |
