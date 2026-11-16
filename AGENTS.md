@@ -6,8 +6,10 @@ Each skill in `skills/` is a self-contained `SKILL.md` that instructs an AI codi
 
 ## Skills
 
+- [`overview`](skills/overview/SKILL.md): Start here. Maps a use case to the right Candide products and how they combine.
 - [`forwarding-address`](skills/forwarding-address/SKILL.md) — Cross-chain deposit address routing via JSON-RPC.
 - [`safe-unified-account`](skills/safe-unified-account/SKILL.md) — Multichain smart accounts with abstractionkit; single signature across all EVM chains.
+- [`safe-passkeys`](skills/safe-passkeys/SKILL.md): Passkeys (WebAuthn P-256) as Safe signers.
 
 ## Using these skills outside Claude Code
 

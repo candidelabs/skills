@@ -50,7 +50,7 @@ One plugin (`candide`), many skills:
 
 - **Point to live docs for anything that changes.** Don't inline full API reference — link `https://docs.candide.dev/...` so the skill doesn't go stale. Instruct the agent to fetch the doc.
 - **Ask before coding.** Good skills have a "Phase 1: Understand" section with 4–6 questions, a "Phase 2: Plan" approval gate, then "Phase 3: Implement". This prevents wasted code.
-- **Validate inputs.** Include an explicit "Validation Rules" section (address regexes, amount formats, chain-id sourcing) the agent can apply before hitting the API.
+- **Validate inputs.** Include an explicit "Validation Rules" section (address regexes, amount formats, chain-id sourcing) the agent can apply before hitting the API. Routing-only skills that make no API calls, such as `overview`, are exempt.
 - **Write in second person** ("You are integrating…"), not third person about the agent. The skill is a directive.
 
 ## Verification before committing

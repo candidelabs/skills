@@ -102,7 +102,7 @@ If passkeys are chosen, the passkey skill owns credential creation, storage, and
 
 Inspecting the orchestrator code is not enough. Exercise the unhappy paths.
 
-- Run end-to-end on at least two testnet account chains.
+- Run end-to-end on a testnet. If the integration spans multiple chains, run it on at least two testnet account chains.
 - Prove the partial-failure path: force one chain to fail (kill an RPC, point at a wrong bundler, etc.) and verify the UI surfaces it and retry-only-failed works.
 - For security ops, prove the pre-submission consistency check actually catches a diverged state.
 
