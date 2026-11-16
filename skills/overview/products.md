@@ -225,7 +225,7 @@ One deterministic deposit address that accepts tokens on every supported EVM cha
   - Each address has one destination chain and one recipient, which are part of its derivation.
   - Source chains are chosen at activation within the forwarder policy.
   - The bridge (Across, LayerZero OFT, CCTP, or same-chain) is chosen automatically.
-  - Funds move through self-custodial contracts. The recipient can always withdraw, and an optional company recovery wallet can recover stuck funds after a timelock.
+  - Funds move through self-custodial contracts. The recipient can always withdraw, and an optional company recovery wallet can recover stuck funds after a timelock. A recipient that can't transact on the source chain (for example, a user funding the address from an exchange) can't recover stuck funds without a separate recovery wallet, so recommend a company recovery wallet for wallet and dapp integrations. The `forwarding-address` skill covers this choice.
 - **Needs:** a dashboard API key, a forwarder policy, and a backend to hold the policy token and activate addresses. No SDK, no ERC-4337 and no smart account is required. The recipient can be any address, including a Candide smart account.
 - **Limits:**
   - Only tokens on supported routes, above the per-bridge minimum, are forwarded.
